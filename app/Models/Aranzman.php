@@ -16,8 +16,10 @@ class Aranzman extends Model
     protected $fillable = [
         'destinacija_id',
         'naziv',
+        'tip',
         'opis',
         'cena',
+        'popust',
         'datum_pocetka',
         'datum_zavrsetka',
         'slobodna_mesta',
