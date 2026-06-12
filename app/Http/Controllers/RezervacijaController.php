@@ -2,22 +2,22 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Resources\RezervacijaResource;
 use App\Models\Aranzman;
 use App\Models\Rezervacija;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class RezervacijaController extends Controller
 {
-    public function index(Request $request): JsonResponse
+    public function index(Request $request): AnonymousResourceCollection
     {
         $rezervacije = Rezervacija::with(['aranzman', 'korisnik'])
             ->where('korisnik_id', $request->user()->id)
             ->get();
 
-        return response()->json([
-            'podaci' => $rezervacije,
-        ]);
+        return RezervacijaResource::collection($rezervacije);
     }
 
     public function store(Request $request): JsonResponse
@@ -40,27 +40,25 @@ class RezervacijaController extends Controller
             ], 422);
         }
 
-        $ukupnaCena = $aranzman->cena * $validiraniPodaci['broj_osoba'];
-
         $rezervacija = Rezervacija::create([
-            'korisnik_id'  => $request->user()->id,
-            'aranzman_id'  => $validiraniPodaci['aranzman_id'],
-            'broj_osoba'   => $validiraniPodaci['broj_osoba'],
-            'ukupna_cena'  => $ukupnaCena,
-            'status'       => 'na_cekanju',
+            'korisnik_id' => $request->user()->id,
+            'aranzman_id' => $validiraniPodaci['aranzman_id'],
+            'broj_osoba'  => $validiraniPodaci['broj_osoba'],
+            'ukupna_cena' => $aranzman->cena * $validiraniPodaci['broj_osoba'],
+            'status'      => 'na_cekanju',
         ]);
 
         $aranzman->decrement('slobodna_mesta', $validiraniPodaci['broj_osoba']);
 
-        $rezervacija->load('aranzman', 'korisnik');
+        $rezervacija->load('aranzman.destinacija', 'korisnik');
 
-        return response()->json([
-            'poruka' => 'Rezervacija je uspešno kreirana.',
-            'podaci' => $rezervacija,
-        ], 201);
+        return (new RezervacijaResource($rezervacija))
+            ->response()
+            ->setStatusCode(201)
+            ->withHeaders(['X-Poruka' => 'Rezervacija je uspešno kreirana.']);
     }
 
-    public function show(Request $request, Rezervacija $rezervacija): JsonResponse
+    public function show(Request $request, Rezervacija $rezervacija): JsonResponse|RezervacijaResource
     {
         if ($rezervacija->korisnik_id !== $request->user()->id) {
             return response()->json([
@@ -70,12 +68,10 @@ class RezervacijaController extends Controller
 
         $rezervacija->load('aranzman.destinacija', 'korisnik');
 
-        return response()->json([
-            'podaci' => $rezervacija,
-        ]);
+        return new RezervacijaResource($rezervacija);
     }
 
-    public function update(Request $request, Rezervacija $rezervacija): JsonResponse
+    public function update(Request $request, Rezervacija $rezervacija): JsonResponse|RezervacijaResource
     {
         if ($rezervacija->korisnik_id !== $request->user()->id) {
             return response()->json([
@@ -92,7 +88,7 @@ class RezervacijaController extends Controller
         $validiraniPodaci = $request->validate([
             'status' => ['sometimes', 'in:na_cekanju,potvrdjena,otkazana'],
         ], [
-            'status.in' => 'Status mora biti: na_cekanju, potvrdjana ili otkazana.',
+            'status.in' => 'Status mora biti: na_cekanju, potvrdjena ili otkazana.',
         ]);
 
         if (isset($validiraniPodaci['status']) && $validiraniPodaci['status'] === 'otkazana') {
@@ -101,10 +97,7 @@ class RezervacijaController extends Controller
 
         $rezervacija->update($validiraniPodaci);
 
-        return response()->json([
-            'poruka' => 'Rezervacija je uspešno ažurirana.',
-            'podaci' => $rezervacija,
-        ]);
+        return new RezervacijaResource($rezervacija);
     }
 
     public function destroy(Request $request, Rezervacija $rezervacija): JsonResponse

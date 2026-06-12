@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Resources\KorisnikResource;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -37,12 +38,8 @@ class AuthController extends Controller
 
         return response()->json([
             'poruka'   => 'Registracija uspešna.',
-            'korisnik' => [
-                'id'    => $korisnik->id,
-                'ime'   => $korisnik->name,
-                'email' => $korisnik->email,
-            ],
-            'token' => $token,
+            'korisnik' => new KorisnikResource($korisnik),
+            'token'    => $token,
         ], 201);
     }
 
@@ -69,12 +66,8 @@ class AuthController extends Controller
 
         return response()->json([
             'poruka'   => 'Prijava uspešna.',
-            'korisnik' => [
-                'id'    => $korisnik->id,
-                'ime'   => $korisnik->name,
-                'email' => $korisnik->email,
-            ],
-            'token' => $token,
+            'korisnik' => new KorisnikResource($korisnik),
+            'token'    => $token,
         ]);
     }
 
@@ -87,14 +80,8 @@ class AuthController extends Controller
         ]);
     }
 
-    public function trenutniKorisnik(Request $request): JsonResponse
+    public function trenutniKorisnik(Request $request): KorisnikResource
     {
-        $korisnik = $request->user();
-
-        return response()->json([
-            'id'    => $korisnik->id,
-            'ime'   => $korisnik->name,
-            'email' => $korisnik->email,
-        ]);
+        return new KorisnikResource($request->user());
     }
 }

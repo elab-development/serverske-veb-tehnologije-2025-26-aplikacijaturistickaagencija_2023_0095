@@ -2,19 +2,19 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Resources\AranzmanResource;
 use App\Models\Aranzman;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class AranzmanController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(): AnonymousResourceCollection
     {
         $aranzmani = Aranzman::with('destinacija')->get();
 
-        return response()->json([
-            'podaci' => $aranzmani,
-        ]);
+        return AranzmanResource::collection($aranzmani);
     }
 
     public function store(Request $request): JsonResponse
@@ -43,22 +43,20 @@ class AranzmanController extends Controller
         $aranzman = Aranzman::create($validiraniPodaci);
         $aranzman->load('destinacija');
 
-        return response()->json([
-            'poruka' => 'Aranžman je uspešno kreiran.',
-            'podaci' => $aranzman,
-        ], 201);
+        return (new AranzmanResource($aranzman))
+            ->response()
+            ->setStatusCode(201)
+            ->withHeaders(['X-Poruka' => 'Aranžman je uspešno kreiran.']);
     }
 
-    public function show(Aranzman $aranzman): JsonResponse
+    public function show(Aranzman $aranzman): AranzmanResource
     {
         $aranzman->load('destinacija', 'rezervacije');
 
-        return response()->json([
-            'podaci' => $aranzman,
-        ]);
+        return new AranzmanResource($aranzman);
     }
 
-    public function update(Request $request, Aranzman $aranzman): JsonResponse
+    public function update(Request $request, Aranzman $aranzman): AranzmanResource
     {
         $validiraniPodaci = $request->validate([
             'destinacija_id'   => ['sometimes', 'integer', 'exists:destinacije,id'],
@@ -78,10 +76,7 @@ class AranzmanController extends Controller
         $aranzman->update($validiraniPodaci);
         $aranzman->load('destinacija');
 
-        return response()->json([
-            'poruka' => 'Aranžman je uspešno ažuriran.',
-            'podaci' => $aranzman,
-        ]);
+        return new AranzmanResource($aranzman);
     }
 
     public function destroy(Aranzman $aranzman): JsonResponse
