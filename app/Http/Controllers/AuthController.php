@@ -54,13 +54,14 @@ class AuthController extends Controller
             'password.required' => 'Lozinka je obavezna.',
         ]);
 
-        if (!Auth::attempt($request->only('email', 'password'))) {
+        $korisnik = User::where('email', $request->email)->first();
+
+        if (!$korisnik || !Hash::check($request->password, $korisnik->password)) {
             throw ValidationException::withMessages([
                 'email' => ['Podaci za prijavu nisu ispravni.'],
             ]);
         }
 
-        $korisnik = $request->user();
         $korisnik->tokens()->delete();
         $token = $korisnik->createToken('api-token')->plainTextToken;
 
@@ -80,8 +81,47 @@ class AuthController extends Controller
         ]);
     }
 
+    public function odjavaIzSvihUredaja(Request $request): JsonResponse
+    {
+        $request->user()->tokens()->delete();
+
+        return response()->json([
+            'poruka' => 'Odjavili ste se sa svih uređaja.',
+        ]);
+    }
+
     public function trenutniKorisnik(Request $request): KorisnikResource
     {
         return new KorisnikResource($request->user());
+    }
+
+    public function promeniLozinku(Request $request): JsonResponse
+    {
+        $request->validate([
+            'trenutna_lozinka' => ['required'],
+            'nova_lozinka'     => ['required', 'confirmed', Password::defaults()],
+        ], [
+            'trenutna_lozinka.required' => 'Trenutna lozinka je obavezna.',
+            'nova_lozinka.required'     => 'Nova lozinka je obavezna.',
+            'nova_lozinka.confirmed'    => 'Potvrda nove lozinke se ne poklapa.',
+        ]);
+
+        if (!Hash::check($request->trenutna_lozinka, $request->user()->password)) {
+            return response()->json([
+                'poruka' => 'Trenutna lozinka nije ispravna.',
+            ], 422);
+        }
+
+        $request->user()->update([
+            'password' => Hash::make($request->nova_lozinka),
+        ]);
+
+        $request->user()->tokens()->delete();
+        $token = $request->user()->createToken('api-token')->plainTextToken;
+
+        return response()->json([
+            'poruka' => 'Lozinka je uspešno promenjena.',
+            'token'  => $token,
+        ]);
     }
 }

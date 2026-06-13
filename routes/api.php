@@ -13,7 +13,9 @@ Route::prefix('auth')->group(function () {
 
     Route::middleware('auth:sanctum')->group(function () {
         Route::post('/odjava', [AuthController::class, 'odjava']);
+        Route::post('/odjava-svuda', [AuthController::class, 'odjavaIzSvihUredaja']);
         Route::get('/korisnik', [AuthController::class, 'trenutniKorisnik']);
+        Route::post('/promeni-lozinku', [AuthController::class, 'promeniLozinku']);
     });
 });
 
