@@ -3,6 +3,7 @@
 use App\Http\Controllers\AranzmanController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DestinacijaController;
+use App\Http\Controllers\PretragaController;
 use App\Http\Controllers\RezervacijaController;
 use Illuminate\Support\Facades\Route;
 
@@ -18,6 +19,9 @@ Route::prefix('auth')->middleware('throttle:10,1')->group(function () {
         Route::post('/promeni-lozinku', [AuthController::class, 'promeniLozinku']);
     });
 });
+
+// Pretraga — javno dostupna, pretražuje aranžmane i destinacije po tekstu
+Route::get('/pretraga', [PretragaController::class, 'pretraga']);
 
 // Javno dostupne rute — pregled aranžmana i destinacija (neulogovan korisnik)
 Route::get('/aranzmani', [AranzmanController::class, 'index']);
