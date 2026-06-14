@@ -10,11 +10,51 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class AranzmanController extends Controller
 {
-    public function index(): AnonymousResourceCollection
+    public function index(Request $request): AnonymousResourceCollection
     {
-        $aranzmani = Aranzman::with('destinacija')->get();
+        $upit = Aranzman::with('destinacija');
 
-        return AranzmanResource::collection($aranzmani);
+        // Filtriranje
+        if ($request->filled('destinacija_id')) {
+            $upit->where('destinacija_id', $request->destinacija_id);
+        }
+
+        if ($request->filled('tip')) {
+            $upit->where('tip', $request->tip);
+        }
+
+        if ($request->filled('cena_min')) {
+            $upit->where('cena', '>=', $request->cena_min);
+        }
+
+        if ($request->filled('cena_max')) {
+            $upit->where('cena', '<=', $request->cena_max);
+        }
+
+        if ($request->filled('slobodna_mesta_min')) {
+            $upit->where('slobodna_mesta', '>=', $request->slobodna_mesta_min);
+        }
+
+        if ($request->filled('datum_od')) {
+            $upit->where('datum_pocetka', '>=', $request->datum_od);
+        }
+
+        if ($request->filled('datum_do')) {
+            $upit->where('datum_pocetka', '<=', $request->datum_do);
+        }
+
+        // Sortiranje
+        $dozvoljenaSortiranjaPolja = ['naziv', 'cena', 'datum_pocetka', 'slobodna_mesta'];
+        $sortiranjePo = in_array($request->sortiraj_po, $dozvoljenaSortiranjaPolja)
+            ? $request->sortiraj_po
+            : 'datum_pocetka';
+        $redosled = $request->redosled === 'desc' ? 'desc' : 'asc';
+        $upit->orderBy($sortiranjePo, $redosled);
+
+        // Paginacija
+        $poStranici = min((int) $request->get('po_stranici', 10), 100);
+
+        return AranzmanResource::collection($upit->paginate($poStranici));
     }
 
     public function store(Request $request): JsonResponse

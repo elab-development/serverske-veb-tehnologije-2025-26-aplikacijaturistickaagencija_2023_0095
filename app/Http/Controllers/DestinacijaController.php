@@ -10,11 +10,31 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class DestinacijaController extends Controller
 {
-    public function index(): AnonymousResourceCollection
+    public function index(Request $request): AnonymousResourceCollection
     {
-        $destinacije = Destinacija::all();
+        $upit = Destinacija::query();
 
-        return DestinacijaResource::collection($destinacije);
+        // Filtriranje
+        if ($request->filled('drzava')) {
+            $upit->where('drzava', 'like', '%' . $request->drzava . '%');
+        }
+
+        if ($request->filled('grad')) {
+            $upit->where('grad', 'like', '%' . $request->grad . '%');
+        }
+
+        // Sortiranje
+        $dozvoljenaSortiranjaPolja = ['naziv', 'drzava', 'grad'];
+        $sortiranjePo = in_array($request->sortiraj_po, $dozvoljenaSortiranjaPolja)
+            ? $request->sortiraj_po
+            : 'naziv';
+        $redosled = $request->redosled === 'desc' ? 'desc' : 'asc';
+        $upit->orderBy($sortiranjePo, $redosled);
+
+        // Paginacija
+        $poStranici = min((int) $request->get('po_stranici', 10), 100);
+
+        return DestinacijaResource::collection($upit->paginate($poStranici));
     }
 
     public function store(Request $request): JsonResponse
