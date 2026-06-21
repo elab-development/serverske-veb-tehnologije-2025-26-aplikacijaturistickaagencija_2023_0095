@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\AzurirajAranzmanRequest;
+use App\Http\Requests\KreirajAranzmanRequest;
 use App\Http\Resources\AranzmanResource;
 use App\Models\Aranzman;
 use Illuminate\Http\JsonResponse;
@@ -12,11 +14,18 @@ class AranzmanController extends Controller
 {
     public function index(Request $request): AnonymousResourceCollection
     {
-        $upit = Aranzman::with('destinacija');
+        $upit = Aranzman::with('destinacija', 'prevoz', 'smestaj');
 
-        // Filtriranje
         if ($request->filled('destinacija_id')) {
             $upit->where('destinacija_id', $request->destinacija_id);
+        }
+
+        if ($request->filled('prevoz_id')) {
+            $upit->where('prevoz_id', $request->prevoz_id);
+        }
+
+        if ($request->filled('smestaj_id')) {
+            $upit->where('smestaj_id', $request->smestaj_id);
         }
 
         if ($request->filled('tip')) {
@@ -43,7 +52,6 @@ class AranzmanController extends Controller
             $upit->where('datum_pocetka', '<=', $request->datum_do);
         }
 
-        // Sortiranje
         $dozvoljenaSortiranjaPolja = ['naziv', 'cena', 'datum_pocetka', 'slobodna_mesta'];
         $sortiranjePo = in_array($request->sortiraj_po, $dozvoljenaSortiranjaPolja)
             ? $request->sortiraj_po
@@ -51,42 +59,15 @@ class AranzmanController extends Controller
         $redosled = $request->redosled === 'desc' ? 'desc' : 'asc';
         $upit->orderBy($sortiranjePo, $redosled);
 
-        // Paginacija
         $poStranici = min((int) $request->get('po_stranici', 10), 100);
 
         return AranzmanResource::collection($upit->paginate($poStranici));
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(KreirajAranzmanRequest $request): JsonResponse
     {
-        $validiraniPodaci = $request->validate([
-            'destinacija_id'   => ['required', 'integer', 'exists:destinacije,id'],
-            'naziv'            => ['required', 'string', 'max:255'],
-            'tip'              => ['required', 'in:letovanje,zimovanje,izlet,krstarenje,gradski_odmor'],
-            'opis'             => ['nullable', 'string'],
-            'cena'             => ['required', 'numeric', 'min:0'],
-            'popust'           => ['sometimes', 'integer', 'min:0', 'max:100'],
-            'datum_pocetka'    => ['required', 'date'],
-            'datum_zavrsetka'  => ['required', 'date', 'after:datum_pocetka'],
-            'slobodna_mesta'   => ['required', 'integer', 'min:0'],
-        ], [
-            'destinacija_id.required'  => 'Destinacija je obavezna.',
-            'destinacija_id.exists'    => 'Odabrana destinacija ne postoji.',
-            'naziv.required'           => 'Naziv aranžmana je obavezan.',
-            'tip.required'             => 'Tip aranžmana je obavezan.',
-            'tip.in'                   => 'Tip mora biti: letovanje, zimovanje, izlet, krstarenje ili gradski_odmor.',
-            'cena.required'            => 'Cena je obavezna.',
-            'cena.numeric'             => 'Cena mora biti broj.',
-            'popust.max'               => 'Popust ne može biti veći od 100%.',
-            'datum_pocetka.required'   => 'Datum početka je obavezan.',
-            'datum_zavrsetka.required' => 'Datum završetka je obavezan.',
-            'datum_zavrsetka.after'    => 'Datum završetka mora biti posle datuma početka.',
-            'slobodna_mesta.required'  => 'Broj slobodnih mesta je obavezan.',
-            'slobodna_mesta.integer'   => 'Slobodna mesta moraju biti ceo broj.',
-        ]);
-
-        $aranzman = Aranzman::create($validiraniPodaci);
-        $aranzman->load('destinacija');
+        $aranzman = Aranzman::create($request->validated());
+        $aranzman->load('destinacija', 'prevoz', 'smestaj');
 
         return (new AranzmanResource($aranzman))
             ->response()
@@ -96,34 +77,15 @@ class AranzmanController extends Controller
 
     public function show(Aranzman $aranzman): AranzmanResource
     {
-        $aranzman->load('destinacija', 'rezervacije');
+        $aranzman->load('destinacija', 'prevoz.partner', 'smestaj.partner', 'rezervacije', 'popusti');
 
         return new AranzmanResource($aranzman);
     }
 
-    public function update(Request $request, Aranzman $aranzman): AranzmanResource
+    public function update(AzurirajAranzmanRequest $request, Aranzman $aranzman): AranzmanResource
     {
-        $validiraniPodaci = $request->validate([
-            'destinacija_id'   => ['sometimes', 'integer', 'exists:destinacije,id'],
-            'naziv'            => ['sometimes', 'string', 'max:255'],
-            'tip'              => ['sometimes', 'in:letovanje,zimovanje,izlet,krstarenje,gradski_odmor'],
-            'opis'             => ['nullable', 'string'],
-            'cena'             => ['sometimes', 'numeric', 'min:0'],
-            'popust'           => ['sometimes', 'integer', 'min:0', 'max:100'],
-            'datum_pocetka'    => ['sometimes', 'date'],
-            'datum_zavrsetka'  => ['sometimes', 'date', 'after:datum_pocetka'],
-            'slobodna_mesta'   => ['sometimes', 'integer', 'min:0'],
-        ], [
-            'destinacija_id.exists'    => 'Odabrana destinacija ne postoji.',
-            'tip.in'                   => 'Tip mora biti: letovanje, zimovanje, izlet, krstarenje ili gradski_odmor.',
-            'cena.numeric'             => 'Cena mora biti broj.',
-            'popust.max'               => 'Popust ne može biti veći od 100%.',
-            'datum_zavrsetka.after'    => 'Datum završetka mora biti posle datuma početka.',
-            'slobodna_mesta.integer'   => 'Slobodna mesta moraju biti ceo broj.',
-        ]);
-
-        $aranzman->update($validiraniPodaci);
-        $aranzman->load('destinacija');
+        $aranzman->update($request->validated());
+        $aranzman->load('destinacija', 'prevoz', 'smestaj');
 
         return new AranzmanResource($aranzman);
     }

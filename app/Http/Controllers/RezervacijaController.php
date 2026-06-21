@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\AzurirajRezervacijuRequest;
+use App\Http\Requests\KreirajRezervacijuRequest;
 use App\Http\Resources\RezervacijaResource;
 use App\Models\Aranzman;
 use App\Models\Rezervacija;
@@ -13,42 +15,42 @@ class RezervacijaController extends Controller
 {
     public function index(Request $request): AnonymousResourceCollection
     {
-        $rezervacije = Rezervacija::with(['aranzman', 'korisnik'])
-            ->where('korisnik_id', $request->user()->id)
-            ->get();
+        $upit = Rezervacija::with(['aranzman.destinacija', 'korisnik'])
+            ->where('korisnik_id', $request->user()->id);
 
-        return RezervacijaResource::collection($rezervacije);
+        if ($request->filled('status')) {
+            $upit->where('status', $request->status);
+        }
+
+        $poStranici = min((int) $request->get('po_stranici', 10), 100);
+
+        return RezervacijaResource::collection($upit->paginate($poStranici));
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(KreirajRezervacijuRequest $request): JsonResponse
     {
-        $validiraniPodaci = $request->validate([
-            'aranzman_id' => ['required', 'integer', 'exists:aranzmani,id'],
-            'broj_osoba'  => ['required', 'integer', 'min:1'],
-        ], [
-            'aranzman_id.required' => 'Aranžman je obavezan.',
-            'aranzman_id.exists'   => 'Odabrani aranžman ne postoji.',
-            'broj_osoba.required'  => 'Broj osoba je obavezan.',
-            'broj_osoba.min'       => 'Broj osoba mora biti najmanje 1.',
-        ]);
+        $podaci   = $request->validated();
+        $aranzman = Aranzman::findOrFail($podaci['aranzman_id']);
 
-        $aranzman = Aranzman::findOrFail($validiraniPodaci['aranzman_id']);
-
-        if ($aranzman->slobodna_mesta < $validiraniPodaci['broj_osoba']) {
+        if ($aranzman->slobodna_mesta < $podaci['broj_osoba']) {
             return response()->json([
                 'poruka' => 'Nema dovoljno slobodnih mesta. Dostupno: ' . $aranzman->slobodna_mesta,
             ], 422);
         }
 
+        $cenaPoDan = $aranzman->popust > 0
+            ? $aranzman->cena * (1 - $aranzman->popust / 100)
+            : $aranzman->cena;
+
         $rezervacija = Rezervacija::create([
             'korisnik_id' => $request->user()->id,
-            'aranzman_id' => $validiraniPodaci['aranzman_id'],
-            'broj_osoba'  => $validiraniPodaci['broj_osoba'],
-            'ukupna_cena' => $aranzman->cena * $validiraniPodaci['broj_osoba'],
+            'aranzman_id' => $podaci['aranzman_id'],
+            'broj_osoba'  => $podaci['broj_osoba'],
+            'ukupna_cena' => $cenaPoDan * $podaci['broj_osoba'],
             'status'      => 'na_cekanju',
         ]);
 
-        $aranzman->decrement('slobodna_mesta', $validiraniPodaci['broj_osoba']);
+        $aranzman->decrement('slobodna_mesta', $podaci['broj_osoba']);
 
         $rezervacija->load('aranzman.destinacija', 'korisnik');
 
@@ -71,7 +73,7 @@ class RezervacijaController extends Controller
         return new RezervacijaResource($rezervacija);
     }
 
-    public function update(Request $request, Rezervacija $rezervacija): JsonResponse|RezervacijaResource
+    public function update(AzurirajRezervacijuRequest $request, Rezervacija $rezervacija): JsonResponse|RezervacijaResource
     {
         if ($rezervacija->korisnik_id !== $request->user()->id) {
             return response()->json([
@@ -85,17 +87,13 @@ class RezervacijaController extends Controller
             ], 422);
         }
 
-        $validiraniPodaci = $request->validate([
-            'status' => ['sometimes', 'in:na_cekanju,potvrdjena,otkazana'],
-        ], [
-            'status.in' => 'Status mora biti: na_cekanju, potvrdjena ili otkazana.',
-        ]);
+        $podaci = $request->validated();
 
-        if (isset($validiraniPodaci['status']) && $validiraniPodaci['status'] === 'otkazana') {
+        if (isset($podaci['status']) && $podaci['status'] === 'otkazana') {
             $rezervacija->aranzman->increment('slobodna_mesta', $rezervacija->broj_osoba);
         }
 
-        $rezervacija->update($validiraniPodaci);
+        $rezervacija->update($podaci);
 
         return new RezervacijaResource($rezervacija);
     }
