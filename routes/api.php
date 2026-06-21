@@ -3,8 +3,10 @@
 use App\Http\Controllers\AranzmanController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DestinacijaController;
+use App\Http\Controllers\PartnerController;
 use App\Http\Controllers\PretragaController;
 use App\Http\Controllers\RezervacijaController;
+use App\Http\Controllers\StatistikaController;
 use Illuminate\Support\Facades\Route;
 
 // Rute za autentifikaciju — throttle sprečava brute-force napade
@@ -29,6 +31,11 @@ Route::get('/aranzmani/{aranzman}', [AranzmanController::class, 'show']);
 Route::get('/destinacije', [DestinacijaController::class, 'index']);
 Route::get('/destinacije/{destinacija}', [DestinacijaController::class, 'show']);
 
+// Ugnježdene javne rute — popusti aranžmana i aranžmani po partneru
+Route::get('/aranzmani/{aranzman}/popusti', [AranzmanController::class, 'popusti']);
+Route::get('/partneri-prevoza/{partnerPrevoza}/aranzmani', [PartnerController::class, 'aranzmaniPrevoza']);
+Route::get('/partneri-smestaja/{partnerSmestaja}/aranzmani', [PartnerController::class, 'aranzmaniSmestaja']);
+
 // Zaštićene rute za ulogovane korisnike
 Route::middleware('auth:sanctum')->group(function () {
     // Rezervacije — dostupno svim ulogovanim korisnicima
@@ -50,5 +57,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/destinacije/{destinacija}', [DestinacijaController::class, 'update']);
         Route::patch('/destinacije/{destinacija}', [DestinacijaController::class, 'update']);
         Route::delete('/destinacije/{destinacija}', [DestinacijaController::class, 'destroy']);
+
+        // Ugnježdena ruta — rezervacije po aranžmanu (samo admin)
+        Route::get('/aranzmani/{aranzman}/rezervacije', [AranzmanController::class, 'rezervacije']);
+
+        // Statistika sa JOIN-om i agregacijom — samo admin
+        Route::get('/statistika/aranzmani', [StatistikaController::class, 'aranzmani']);
     });
 });

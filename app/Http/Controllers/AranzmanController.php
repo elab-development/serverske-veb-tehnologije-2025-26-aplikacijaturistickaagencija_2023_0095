@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Http\Requests\AzurirajAranzmanRequest;
 use App\Http\Requests\KreirajAranzmanRequest;
 use App\Http\Resources\AranzmanResource;
+use App\Http\Resources\PopustResource;
+use App\Http\Resources\RezervacijaResource;
 use App\Models\Aranzman;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -97,5 +99,20 @@ class AranzmanController extends Controller
         return response()->json([
             'poruka' => 'Aranžman je uspešno obrisan.',
         ]);
+    }
+
+    public function rezervacije(Request $request, Aranzman $aranzman): AnonymousResourceCollection
+    {
+        $poStranici  = min((int) $request->get('po_stranici', 10), 100);
+        $rezervacije = $aranzman->rezervacije()
+            ->with('korisnik')
+            ->paginate($poStranici);
+
+        return RezervacijaResource::collection($rezervacije);
+    }
+
+    public function popusti(Aranzman $aranzman): AnonymousResourceCollection
+    {
+        return PopustResource::collection($aranzman->popusti);
     }
 }
