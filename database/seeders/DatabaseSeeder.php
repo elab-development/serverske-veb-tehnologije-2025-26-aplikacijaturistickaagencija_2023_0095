@@ -24,6 +24,9 @@ class DatabaseSeeder extends Seeder
 
         $this->call([
             DestinacijaSeeder::class,
+            PartnerSeeder::class,
+            PrevozSeeder::class,
+            SmestajSeeder::class,
             AranzmanSeeder::class,
             RezervacijaSeeder::class,
         ]);
