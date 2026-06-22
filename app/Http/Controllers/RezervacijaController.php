@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\NedovoljnoMestaException;
 use App\Http\Requests\AzurirajRezervacijuRequest;
 use App\Http\Requests\KreirajRezervacijuRequest;
 use App\Http\Resources\RezervacijaResource;
@@ -10,6 +11,7 @@ use App\Models\Rezervacija;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\DB;
 
 class RezervacijaController extends Controller
 {
@@ -29,28 +31,37 @@ class RezervacijaController extends Controller
 
     public function store(KreirajRezervacijuRequest $request): JsonResponse
     {
-        $podaci   = $request->validated();
-        $aranzman = Aranzman::findOrFail($podaci['aranzman_id']);
+        $podaci = $request->validated();
 
-        if ($aranzman->slobodna_mesta < $podaci['broj_osoba']) {
-            return response()->json([
-                'poruka' => 'Nema dovoljno slobodnih mesta. Dostupno: ' . $aranzman->slobodna_mesta,
-            ], 422);
+        try {
+            $rezervacija = DB::transaction(function () use ($podaci, $request) {
+                $aranzman = Aranzman::findOrFail($podaci['aranzman_id']);
+
+                if ($aranzman->slobodna_mesta < $podaci['broj_osoba']) {
+                    throw new NedovoljnoMestaException(
+                        'Nema dovoljno slobodnih mesta. Dostupno: ' . $aranzman->slobodna_mesta
+                    );
+                }
+
+                $cenaPoDan = $aranzman->popust > 0
+                    ? $aranzman->cena * (1 - $aranzman->popust / 100)
+                    : $aranzman->cena;
+
+                $rezervacija = Rezervacija::create([
+                    'korisnik_id' => $request->user()->id,
+                    'aranzman_id' => $podaci['aranzman_id'],
+                    'broj_osoba'  => $podaci['broj_osoba'],
+                    'ukupna_cena' => $cenaPoDan * $podaci['broj_osoba'],
+                    'status'      => 'na_cekanju',
+                ]);
+
+                $aranzman->decrement('slobodna_mesta', $podaci['broj_osoba']);
+
+                return $rezervacija;
+            });
+        } catch (NedovoljnoMestaException $e) {
+            return response()->json(['poruka' => $e->getMessage()], 422);
         }
-
-        $cenaPoDan = $aranzman->popust > 0
-            ? $aranzman->cena * (1 - $aranzman->popust / 100)
-            : $aranzman->cena;
-
-        $rezervacija = Rezervacija::create([
-            'korisnik_id' => $request->user()->id,
-            'aranzman_id' => $podaci['aranzman_id'],
-            'broj_osoba'  => $podaci['broj_osoba'],
-            'ukupna_cena' => $cenaPoDan * $podaci['broj_osoba'],
-            'status'      => 'na_cekanju',
-        ]);
-
-        $aranzman->decrement('slobodna_mesta', $podaci['broj_osoba']);
 
         $rezervacija->load('aranzman.destinacija', 'korisnik');
 
